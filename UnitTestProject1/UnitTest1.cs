@@ -10,6 +10,60 @@ namespace UnitTestProject1
     public class UnitTest1
     {
         [TestMethod]
+        public void Normal()
+        {
+            var filepath = "./temp.db";
+            System.IO.File.Delete(filepath);
+
+            var context = new StorageContext<MyDataItem>(filepath, "Name" );
+            context.Add(new MyDataItem() { 
+                Name = "MyName1",
+                Company = "Microsoft"
+            });
+
+            context.Add(new MyDataItem()
+            {
+                Name = "MyName1",
+                Company = "Microsoft"
+            });
+
+            context.Remove(context.Where(m => m.Name.Contains("My")));
+
+            context.Dispose();
+        }
+
+        [TestMethod]
+        public void RepeatCheck()
+        {
+            var filepath = "./temp.db";
+            System.IO.File.Delete(filepath);
+
+            var context = new StorageContext<MyDataItem>(filepath, "Name" , true);
+            context.Add(new MyDataItem()
+            {
+                Name = "MyName1",
+                Company = "Microsoft"
+            });
+
+            try
+            {
+                context.Add(new MyDataItem()
+                {
+                    Name = "MyName1",
+                    Company = "Microsoft"
+                });
+
+                throw new Exception("重复数据也能添加");
+            }
+            catch
+            {
+
+            }
+
+            context.Dispose();
+        }
+
+        [TestMethod]
         public void Add()
         {
             var filepath = "./test.db";
@@ -77,6 +131,6 @@ namespace UnitTestProject1
     class MyDataItem
     {
         public string Name { get; set; }
-
+        public string Company { get; set; }
     }
 }

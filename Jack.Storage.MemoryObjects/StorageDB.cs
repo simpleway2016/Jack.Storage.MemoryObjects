@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -11,8 +12,10 @@ namespace Jack.Storage.MemoryObjects
         SqliteConnection _sqlCon;
         SqliteConnection _sqlConForDelete;
         PropertyInfo _pro;
-        public StorageDB(string filepath,PropertyInfo property)
+        ILogger _logger;
+        public StorageDB(string filepath,PropertyInfo property, ILogger logger)
         {
+            _logger = logger;
             _pro = property;
                _sqlCon = new SqliteConnection($"Data Source=\"{filepath}\"");
             _sqlCon.Open();
@@ -108,7 +111,7 @@ CREATE TABLE [main](
     [Content] TEXT);
 ";
             string sql2 = @"
-CREATE UNIQUE INDEX primary_index ON [main] (
+CREATE INDEX primary_index ON [main] (
     key ASC
 );
 ";
@@ -172,33 +175,50 @@ CREATE UNIQUE INDEX primary_index ON [main] (
         public void Insert(System.Collections.IEnumerable list)
         {
             var tran = _sqlCon.BeginTransaction();
-            using (var cmd = _sqlCon.CreateCommand())
+            try
             {
-                cmd.Transaction = tran;
-                foreach (var data in list)
+                using (var cmd = _sqlCon.CreateCommand())
                 {
-                    var key = _pro.GetValue(data);
-                    cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
-                    var p = cmd.CreateParameter();
-                    p.ParameterName = "p0";
-                    p.Value = key;
-                    cmd.Parameters.Add(p);
+                    cmd.Transaction = tran;
+                    foreach (var data in list)
+                    {
+                        var key = _pro.GetValue(data);
+                        cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
+                        var p = cmd.CreateParameter();
+                        p.ParameterName = "p0";
+                        p.Value = key;
+                        cmd.Parameters.Add(p);
 
-                    p = cmd.CreateParameter();
-                    p.ParameterName = "p1";
-                    p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                    cmd.Parameters.Add(p);
+                        p = cmd.CreateParameter();
+                        p.ParameterName = "p1";
+                        try
+                        {
+                            p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
+                            p.Value = ex.Message;
+                        }
+                        cmd.Parameters.Add(p);
 
-                    p = cmd.CreateParameter();
-                    p.ParameterName = "p2";
-                    p.Value = DateTime.Now;
-                    cmd.Parameters.Add(p);
+                        p = cmd.CreateParameter();
+                        p.ParameterName = "p2";
+                        p.Value = DateTime.Now;
+                        cmd.Parameters.Add(p);
 
-                    cmd.ExecuteNonQuery();
-                    cmd.Parameters.Clear();
+                        cmd.ExecuteNonQuery();
+                        cmd.Parameters.Clear();
+                    }
                 }
+                tran.Commit();
             }
-            tran.Commit();
+            catch (Exception ex)
+            {
+                tran.Rollback();
+                _logger?.LogError("write file error. \r\n{0}",ex.ToString());
+            }
+           
         }
 
         public void Dispose()
