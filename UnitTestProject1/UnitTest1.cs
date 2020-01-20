@@ -93,6 +93,39 @@ namespace UnitTestProject1
         }
 
         [TestMethod]
+        public void Update()
+        {
+            var filepath = "./test_Update.db";
+            System.IO.File.Delete(filepath);
+
+            var context = new StorageContext<MyDataItem>(filepath, "Name");
+            System.Threading.Tasks.Parallel.For(0, 10, (i) => {
+                var item = new MyDataItem();
+                item.Name = "Jack" + i;
+                context.Add(item);
+            });
+
+            if (context.Count != 10)
+                throw new Exception("数量不对");
+
+            var obj = context.FirstOrDefault(m => m.Name == "Jack5");
+            obj.Company = "abc";
+            context.Update(obj);
+
+            context.Dispose();
+
+
+
+            context = new StorageContext<MyDataItem>(filepath, "Name");
+            if (context.Count != 10)
+                throw new Exception("数量不对");
+
+            obj = context.FirstOrDefault(m => m.Name == "Jack5");
+            if (obj.Company != "abc")
+                throw new Exception("数据错误");
+        }
+
+        [TestMethod]
         public void Remove()
         {
             var filepath = "./test2.db";

@@ -129,27 +129,6 @@ CREATE INDEX primary_index ON [main] (
 
         }
 
-        public void DeleteData(System.Collections.IEnumerable list)
-        {
-            var tran = _sqlConForDelete.BeginTransaction();
-          
-            using (var cmd = _sqlConForDelete.CreateCommand())
-            {
-                cmd.Transaction = tran;
-                foreach (var data in list)
-                {
-                    var key = _pro.GetValue(data);
-                    cmd.CommandText = $"delete from [main] where key=@p0";
-                    var p = cmd.CreateParameter();
-                    p.ParameterName = "p0";
-                    p.Value = key;
-                    cmd.Parameters.Add(p);
-                    cmd.ExecuteNonQuery();
-                    cmd.Parameters.Clear();
-                }
-            }
-            tran.Commit();
-        }
         public void ReadData<T>(Action<T> callback)
         {
             using (var cmd = _sqlCon.CreateCommand())
@@ -172,7 +151,7 @@ CREATE INDEX primary_index ON [main] (
                 return cmd.ExecuteScalar();
             }
         }
-        public void Insert(System.Collections.IEnumerable list)
+        public void Handle<T>(System.Collections.IEnumerable list)
         {
             var tran = _sqlCon.BeginTransaction();
             try
@@ -180,33 +159,71 @@ CREATE INDEX primary_index ON [main] (
                 using (var cmd = _sqlCon.CreateCommand())
                 {
                     cmd.Transaction = tran;
-                    foreach (var data in list)
+                    foreach (OpAction<T> item in list)
                     {
+                        var data = item.Data;
+                        
                         var key = _pro.GetValue(data);
-                        cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
-                        var p = cmd.CreateParameter();
-                        p.ParameterName = "p0";
-                        p.Value = key;
-                        cmd.Parameters.Add(p);
 
-                        p = cmd.CreateParameter();
-                        p.ParameterName = "p1";
-                        try
+                        if (item.Type == ActionType.Add)
                         {
-                            p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+                            cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
+                            var p = cmd.CreateParameter();
+                            p.ParameterName = "p0";
+                            p.Value = key;
+                            cmd.Parameters.Add(p);
+
+                            p = cmd.CreateParameter();
+                            p.ParameterName = "p1";
+                            try
+                            {
+                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
+                                p.Value = ex.Message;
+                            }
+                            cmd.Parameters.Add(p);
+
+                            p = cmd.CreateParameter();
+                            p.ParameterName = "p2";
+                            p.Value = DateTime.Now;
+                            cmd.Parameters.Add(p);
+
+                           
                         }
-                        catch (Exception ex)
+                        else if (item.Type == ActionType.Update)
                         {
-                            _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
-                            p.Value = ex.Message;
+                            cmd.CommandText = $"update [main] set Content=@p1 where key=@p0";
+
+                            var p = cmd.CreateParameter();
+                            p.ParameterName = "p0";
+                            p.Value = key;
+                            cmd.Parameters.Add(p);
+
+                            p = cmd.CreateParameter();
+                            p.ParameterName = "p1";
+                            try
+                            {
+                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
+                                p.Value = ex.Message;
+                            }
+                            cmd.Parameters.Add(p);
+
                         }
-                        cmd.Parameters.Add(p);
-
-                        p = cmd.CreateParameter();
-                        p.ParameterName = "p2";
-                        p.Value = DateTime.Now;
-                        cmd.Parameters.Add(p);
-
+                        else if(item.Type == ActionType.Remove)
+                        {
+                            cmd.CommandText = $"delete from [main] where key=@p0";
+                            var p = cmd.CreateParameter();
+                            p.ParameterName = "p0";
+                            p.Value = key;
+                            cmd.Parameters.Add(p);
+                        }
                         cmd.ExecuteNonQuery();
                         cmd.Parameters.Clear();
                     }

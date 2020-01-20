@@ -21,13 +21,10 @@ namespace Jack.Storage.MemoryObjects
 
         bool _disposed = false;
         List<T> _dataList = new List<T>();
-        ConcurrentQueue<T> _backupQueue = new ConcurrentQueue<T>();
+        ConcurrentQueue<OpAction<T>> _backupQueue = new ConcurrentQueue<OpAction<T>>();
         System.Threading.ManualResetEvent _backupEvent = new System.Threading.ManualResetEvent(false);
         bool _backupExited = false;
 
-        ConcurrentQueue<T> _removeQueue = new ConcurrentQueue<T>();
-        System.Threading.ManualResetEvent _removeEvent = new System.Threading.ManualResetEvent(false);
-        bool _removeExited = false;
 
         System.Reflection.PropertyInfo _propertyInfo;
         StorageDB _db;
@@ -67,7 +64,6 @@ namespace Jack.Storage.MemoryObjects
             });
 
             new Thread(backupRunning).Start();
-            new Thread(removeRunning).Start();
         }
 
       
@@ -78,10 +74,10 @@ namespace Jack.Storage.MemoryObjects
                 _backupEvent.WaitOne();
                 _backupEvent.Reset();
 
-                List<T> buffer = new List<T>(100);
+                List<OpAction<T>> buffer = new List<OpAction<T>>(500);
                 while(true)
                 {
-                    if (_backupQueue.TryDequeue(out T dataitem))
+                    if (_backupQueue.TryDequeue(out OpAction<T> dataitem))
                     {
                         buffer.Add(dataitem);
                     }
@@ -91,43 +87,19 @@ namespace Jack.Storage.MemoryObjects
 
                 if (buffer.Count > 0)
                 {
-                    _db.Insert(buffer);
+                    _db.Handle<T>(buffer);
                 }
                     
             }
             _backupExited = true;
         }
-        void removeRunning()
-        {
-            while (!_disposed || _removeQueue.Count > 0)
-            {
-                _removeEvent.WaitOne();
-                _removeEvent.Reset();
 
-                List<T> buffer = new List<T>(100);
-                while (true)
-                {
-                    if (_removeQueue.TryDequeue(out T dataitem))
-                    {
-                        buffer.Add(dataitem);
-                    }
-                    else
-                        break;
-                }
-
-                if (buffer.Count > 0)
-                {
-                    _db.DeleteData(buffer);
-                }
-            }
-            _removeExited = false;
-        }
         public void Dispose()
         {
             _disposed = true;
             _backupEvent.Set();
-            _removeEvent.Set();
-            while (!_backupExited || _removeExited)
+
+            while (!_backupExited )
                 Thread.Sleep(100);
             _db.Dispose();
         }
@@ -156,11 +128,37 @@ namespace Jack.Storage.MemoryObjects
                     _dataList.Add(item);
                 }
             }
-            _backupQueue.Enqueue(item);
+            _backupQueue.Enqueue(new OpAction<T>() { 
+                Type = ActionType.Add,
+                Data = item
+            });
             _backupEvent.Set();
         }
-
-
+        /// <summary>
+        /// 如果对象属性改变，调用此方法，更新到文件（注意：主键属性不要更改）
+        /// </summary>
+        /// <param name="item"></param>
+        public void Update(T item)
+        {
+            var key = _propertyInfo.GetValue(item);
+            lock (_dataList)
+            {
+                if (_checkRepeatPrimaryKey)
+                {
+                    var _whereQuery = LinqHelper.InvokeWhereEquals(_dataList.Where(m=>m.Equals(item) == false).AsQueryable<T>(), _propertyInfo.Name, key);
+                    if (LinqHelper.InvokeAny(_whereQuery))
+                    {
+                        throw new Exception($"{key} exist");
+                    }
+                }
+            }
+            _backupQueue.Enqueue(new OpAction<T>()
+            {
+                Type = ActionType.Update,
+                Data = item
+            });
+            _backupEvent.Set();
+        }
         public void Remove(T item)
         {
             lock (_dataList)
@@ -168,8 +166,12 @@ namespace Jack.Storage.MemoryObjects
                 _dataList.Remove(item);
             }
 
-            _removeQueue.Enqueue(item);
-            _removeEvent.Set();
+            _backupQueue.Enqueue(new OpAction<T>()
+            {
+                Type = ActionType.Remove,
+                Data = item
+            });
+            _backupEvent.Set();
         }
         public void Remove(IEnumerable<T> list)
         {
@@ -184,10 +186,14 @@ namespace Jack.Storage.MemoryObjects
 
             foreach (var item in arr)
             {
-                _removeQueue.Enqueue(item);
+                _backupQueue.Enqueue(new OpAction<T>()
+                {
+                    Type = ActionType.Remove,
+                    Data = item
+                });
             }
            
-            _removeEvent.Set();
+            _backupEvent.Set();
         }
 
         public IEnumerator<T> GetEnumerator()
