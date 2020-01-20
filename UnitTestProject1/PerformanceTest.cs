@@ -15,7 +15,7 @@ namespace UnitTestProject1
         [TestMethod]
         public void Add()
         {
-            var filepath = "./test.db";
+            var filepath = "./PerformanceTest.db";
             System.IO.File.Delete(filepath);
 
             var context = new StorageContext<MyDataItem>(filepath, "Name");
@@ -25,6 +25,8 @@ namespace UnitTestProject1
             context.Dispose();
 
             System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
+            System.Diagnostics.Stopwatch watch2 = new System.Diagnostics.Stopwatch();
+            watch2.Start();
             watch.Start();
             context = new StorageContext<MyDataItem>(filepath, "Name");
             for(int i = 0; i < 1000000; i ++)
@@ -38,8 +40,9 @@ namespace UnitTestProject1
             Debug.WriteLine($"总耗时：{watch.ElapsedMilliseconds}ms");
 
             context.Dispose();
+            watch2.Stop();
+            Debug.WriteLine($"写入文件总耗时：{watch2.ElapsedMilliseconds}ms");
 
-           
         }
 
        
