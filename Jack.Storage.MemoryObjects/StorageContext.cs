@@ -37,7 +37,7 @@ namespace Jack.Storage.MemoryObjects
         /// </summary>
         /// <param name="filepath">文件保存路径</param>
         /// <param name="primaryPropertyName">主键属性的名称，必须是long、int、string类型</param>
-        /// <param name="checkRepeatPrimaryKey">是否检查主键重复，如果为true，会对写入性能有微弱的影响</param>
+        /// <param name="checkRepeatPrimaryKey">是否检查主键重复，如果为true，会对写入性能有影响</param>
         /// <param name="logger"></param>
         public StorageContext(string filepath,string primaryPropertyName, bool checkRepeatPrimaryKey = false, ILogger logger = null)
         {
@@ -149,8 +149,9 @@ namespace Jack.Storage.MemoryObjects
                 }
                 else
                 {
-                    if (_dataList.Contains(item))
-                        throw new Exception($"此对象已经在集合当中，不能重复添加");
+                    //这个判断影响写入性能
+                    //if (_dataList.Contains(item))
+                    //    throw new Exception($"此对象已经在集合当中，不能重复添加");
 
                     _dataList.Add(item);
                 }
