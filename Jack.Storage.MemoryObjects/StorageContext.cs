@@ -41,7 +41,7 @@ namespace Jack.Storage.MemoryObjects
         /// <param name="logger"></param>
         public StorageContext(string storageName,string primaryPropertyName, bool checkRepeatPrimaryKey = false, ILogger logger = null)
         {
-            var filepath = "./data/" + storageName + ".db";
+            var filepath = "./Jack.Storage.MemoryObjects.datas/" + storageName + ".db";
             _checkRepeatPrimaryKey = checkRepeatPrimaryKey;
             if (string.IsNullOrEmpty(filepath))
                 throw new Exception("filepath is empty");
