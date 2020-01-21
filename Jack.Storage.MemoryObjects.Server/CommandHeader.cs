@@ -9,5 +9,6 @@ namespace Jack.Storage.MemoryObjects.Server
         public string FilePath;
         public string KeyName;
         public string KeyType;
+        public bool ReadData = true;
     }
 }

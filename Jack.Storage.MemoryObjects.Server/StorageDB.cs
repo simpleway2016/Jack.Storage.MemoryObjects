@@ -176,13 +176,20 @@ CREATE INDEX primary_index ON [main] (
                         var data = item.Data;
 
                         var key = Convert.ChangeType(item.KeyValue, _keytype);
+                        cmd.CommandText = "select exists (SELECT * FROM [main] where key=@key)";
+                        var p = cmd.CreateParameter();
+                        p.ParameterName = "key";
+                        p.Value = key;
+                        cmd.Parameters.Add(p);
+
+                        if (item.Type == ActionType.Add && Convert.ToBoolean(cmd.ExecuteScalar()) )
+                        {
+                            item.Type = ActionType.Update;
+                        }
+
                         if (item.Type == ActionType.Add)
                         {
-                            cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
+                            cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@key,@p1,@p2)";
 
                             p = cmd.CreateParameter();
                             p.ParameterName = "p1";
@@ -198,12 +205,7 @@ CREATE INDEX primary_index ON [main] (
                         }
                         else if (item.Type == ActionType.Update)
                         {
-                            cmd.CommandText = $"update [main] set Content=@p1 where key=@p0";
-
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
+                            cmd.CommandText = $"update [main] set Content=@p1 where key=@key";
 
                             p = cmd.CreateParameter();
                             p.ParameterName = "p1";
@@ -213,11 +215,7 @@ CREATE INDEX primary_index ON [main] (
                         }
                         else if(item.Type == ActionType.Remove)
                         {
-                            cmd.CommandText = $"delete from [main] where key=@p0";
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
+                            cmd.CommandText = $"delete from [main] where key=@key";
                         }
                         else if (item.Type == ActionType.DeleteFile)
                         {

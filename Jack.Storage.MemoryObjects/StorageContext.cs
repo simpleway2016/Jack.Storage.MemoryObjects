@@ -31,7 +31,7 @@ namespace Jack.Storage.MemoryObjects
         StorageDB _db;
         bool _checkRepeatPrimaryKey;
 
-        Client _netClient;
+        Client<T> _netClient;
         /// <summary>
         /// 
         /// </summary>
@@ -97,15 +97,14 @@ namespace Jack.Storage.MemoryObjects
             }
             this.StorageName = storageName;
 
-            _netClient = new Client(serverAddr, port, _propertyInfo, new CommandHeader() { 
-            FilePath = filepath,
-            KeyName = primaryPropertyName,
-            KeyType = _propertyInfo.PropertyType.FullName
-            });
-
-            _netClient.ReadData<T>((item) => {
+            _netClient = new Client<T>(serverAddr, port, _propertyInfo, new CommandHeader() { 
+                FilePath = filepath,
+                KeyName = primaryPropertyName,
+                KeyType = _propertyInfo.PropertyType.FullName
+            }, (item) => {
                 _dataList.Add(item);
             });
+
         }
 
 
@@ -160,7 +159,7 @@ namespace Jack.Storage.MemoryObjects
             {
                 lock (_netClient)
                 {
-                    _netClient.Send<T>(new OpAction<T>()
+                    _netClient.Send(new OpAction<T>()
                     {
                         Type = ActionType.DeleteFile,
                     });
@@ -211,7 +210,7 @@ namespace Jack.Storage.MemoryObjects
                 }
                 else
                 {
-                    _netClient.Send<T>(new OpAction<T>()
+                    _netClient.Send(new OpAction<T>()
                     {
                         Type = ActionType.Add,
                         Data = item
@@ -251,7 +250,7 @@ namespace Jack.Storage.MemoryObjects
                 }
                 else
                 {
-                    _netClient.Send<T>(new OpAction<T>()
+                    _netClient.Send(new OpAction<T>()
                     {
                         Type = ActionType.Update,
                         Data = item
@@ -281,7 +280,7 @@ namespace Jack.Storage.MemoryObjects
                 }
                 else
                 {
-                    _netClient.Send<T>(new OpAction<T>()
+                    _netClient.Send(new OpAction<T>()
                     {
                         Type = ActionType.Remove,
                         Data = item
@@ -326,7 +325,7 @@ namespace Jack.Storage.MemoryObjects
                     {
                         if (item != null)
                         {
-                            _netClient.Send<T>(new OpAction<T>()
+                            _netClient.Send(new OpAction<T>()
                             {
                                 Type = ActionType.Remove,
                                 Data = item

@@ -8,6 +8,7 @@ namespace Jack.Storage.MemoryObjects
     {
         public ActionType Type;
         public T Data;
+        public Action CallBack;
     }
     enum ActionType
     {

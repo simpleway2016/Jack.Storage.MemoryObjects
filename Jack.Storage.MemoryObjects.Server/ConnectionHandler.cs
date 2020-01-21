@@ -30,12 +30,16 @@ namespace Jack.Storage.MemoryObjects.Server
             _db = new StorageDB(header.FilePath, header.KeyName, header.KeyType);
 
             //读取现有数据
-            _db.ReadData((content) => {
-                var bs = Encoding.UTF8.GetBytes(content);
-                _client.Write(bs.Length);
-                _client.Write(bs);
-            });
-            _client.Write((int)-1);
+            if (header.ReadData)
+            {
+                _db.ReadData((content) =>
+                {
+                    var bs = Encoding.UTF8.GetBytes(content);
+                    _client.Write(bs.Length);
+                    _client.Write(bs);
+                });
+                _client.Write((int)-1);
+            }
 
             new Thread(processAction).Start();
 
@@ -50,7 +54,6 @@ namespace Jack.Storage.MemoryObjects.Server
                         Thread.Sleep(10);
                     Thread.Sleep(1000);
 
-                    _client.Write(true);
                     break;
                 }
                 _backupQueue.Enqueue(action);
