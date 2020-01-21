@@ -22,7 +22,7 @@ namespace UnitTestProject1
             watch2.Start();
             watch.Start();
 
-            for(int i = 0; i < 100000; i ++)
+            for(int i = 0; i < 1000000; i ++)
             {
                 var item = new MyDataItem();
                 item.Name = "Jack" + i;

@@ -60,9 +60,10 @@ namespace Jack.Storage.MemoryObjects.Net
                     while (!_disposed)
                     {
                         try
-                        {
+                        {                           
                             ContentAction action = new ContentAction();
                             action.Type = item.Type;
+                            
                             if (item.Data != null)
                             {
                                 action.KeyValue = _propertyInfo.GetValue(item.Data).ToString();
@@ -78,6 +79,14 @@ namespace Jack.Storage.MemoryObjects.Net
 
                             if (item.Type == ActionType.CheckSaved)
                             {
+                                try
+                                {
+                                    _stream.ReadBoolean();
+                                }
+                                catch
+                                {
+
+                                }
                                 _stream.Dispose();
                                 return;
                             }
