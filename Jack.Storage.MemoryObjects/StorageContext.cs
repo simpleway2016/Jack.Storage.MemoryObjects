@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using Jack.Storage.MemoryObjects.Net;
 
 namespace Jack.Storage.MemoryObjects
 {
@@ -14,7 +15,7 @@ namespace Jack.Storage.MemoryObjects
     /// <typeparam name="T"></typeparam>
     public class StorageContext<T> : IDisposable, IEnumerable<T>
     {
-        public string FilePath { get; }
+        public string StorageName { get; }
 
         public int Count => _dataList.Count;
 
@@ -29,15 +30,18 @@ namespace Jack.Storage.MemoryObjects
         System.Reflection.PropertyInfo _propertyInfo;
         StorageDB _db;
         bool _checkRepeatPrimaryKey;
+
+        Client _netClient;
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="filepath">文件保存路径</param>
+        /// <param name="storageName">保存的名称</param>
         /// <param name="primaryPropertyName">主键属性的名称，必须是long、int、string类型</param>
         /// <param name="checkRepeatPrimaryKey">是否检查主键重复，如果为true，会对写入性能有影响</param>
         /// <param name="logger"></param>
-        public StorageContext(string filepath,string primaryPropertyName, bool checkRepeatPrimaryKey = false, ILogger logger = null)
+        public StorageContext(string storageName,string primaryPropertyName, bool checkRepeatPrimaryKey = false, ILogger logger = null)
         {
+            var filepath = "./data/" + storageName + ".db";
             _checkRepeatPrimaryKey = checkRepeatPrimaryKey;
             if (string.IsNullOrEmpty(filepath))
                 throw new Exception("filepath is empty");
@@ -55,7 +59,7 @@ namespace Jack.Storage.MemoryObjects
             {
                 throw new Exception("主键属性必须是long、int、string类型");
             }
-            this.FilePath = filepath;
+            this.StorageName = storageName;
 
             _db = new StorageDB(filepath , _propertyInfo , logger);
 
@@ -65,8 +69,46 @@ namespace Jack.Storage.MemoryObjects
 
             new Thread(backupRunning).Start();
         }
+        /// <summary>
+        /// 通过网络服务保存为文件，持久化数据
+        /// </summary>
+        /// <param name="serverAddr">服务期地址</param>
+        /// <param name="port">端口</param>
+        /// <param name="storageName">保存的名称</param>
+        /// <param name="primaryPropertyName">主键属性的名称，必须是long、int、string类型</param>
+        public StorageContext(string serverAddr,int port,string storageName, string primaryPropertyName)
+        {
+            var filepath = "./data/" + storageName + ".db";
+            if (string.IsNullOrEmpty(filepath))
+                throw new Exception("filepath is empty");
+            if (string.IsNullOrEmpty(primaryPropertyName))
+                throw new Exception("primaryPropertyName is empty");
 
-      
+            _propertyInfo = typeof(T).GetProperty(primaryPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (_propertyInfo == null)
+                throw new Exception($"{typeof(T).FullName} can not find property: {primaryPropertyName}");
+
+            if (_propertyInfo.PropertyType != typeof(string) &&
+                _propertyInfo.PropertyType != typeof(int) &&
+                _propertyInfo.PropertyType != typeof(long)
+                )
+            {
+                throw new Exception("主键属性必须是long、int、string类型");
+            }
+            this.StorageName = storageName;
+
+            _netClient = new Client(serverAddr, port, _propertyInfo, new CommandHeader() { 
+            FilePath = filepath,
+            KeyName = primaryPropertyName,
+            KeyType = _propertyInfo.PropertyType.FullName
+            });
+
+            _netClient.ReadData<T>((item) => {
+                _dataList.Add(item);
+            });
+        }
+
+
         void backupRunning()
         {
             while(!_disposed || _backupQueue.Count > 0)
@@ -96,17 +138,47 @@ namespace Jack.Storage.MemoryObjects
 
         public void Dispose()
         {
-            _disposed = true;
-            _backupEvent.Set();
+            if (_netClient == null)
+            {
+                _disposed = true;
+                _backupEvent.Set();
 
-            while (!_backupExited )
-                Thread.Sleep(100);
-            _db.Dispose();
+                while (!_backupExited)
+                    Thread.Sleep(100);
+                _db.Dispose();
+            }
+            else
+            {
+                _netClient.CheckAllSaved();
+                _netClient.Dispose();
+            }
+        }
+
+        void DeleteFile()
+        {
+            if(_netClient != null)
+            {
+                lock (_netClient)
+                {
+                    _netClient.Send<T>(new OpAction<T>()
+                    {
+                        Type = ActionType.DeleteFile,
+                    });
+                }
+            }
+            lock(_dataList)
+            {
+                this._dataList.Clear();
+
+            }
+          
         }
 
         
         public void Add(T item)
         {
+            if (item == null)
+                return;
             var key = _propertyInfo.GetValue(item);
             lock (_dataList)
             {
@@ -127,12 +199,26 @@ namespace Jack.Storage.MemoryObjects
 
                     _dataList.Add(item);
                 }
+
+                if (_netClient == null)
+                {
+                    _backupQueue.Enqueue(new OpAction<T>()
+                    {
+                        Type = ActionType.Add,
+                        Data = item
+                    });
+                    _backupEvent.Set();
+                }
+                else
+                {
+                    _netClient.Send<T>(new OpAction<T>()
+                    {
+                        Type = ActionType.Add,
+                        Data = item
+                    });
+                }
             }
-            _backupQueue.Enqueue(new OpAction<T>() { 
-                Type = ActionType.Add,
-                Data = item
-            });
-            _backupEvent.Set();
+           
         }
         /// <summary>
         /// 如果对象属性改变，调用此方法，更新到文件（注意：主键属性不要更改）
@@ -140,6 +226,8 @@ namespace Jack.Storage.MemoryObjects
         /// <param name="item"></param>
         public void Update(T item)
         {
+            if (item == null)
+                return;
             var key = _propertyInfo.GetValue(item);
             lock (_dataList)
             {
@@ -151,49 +239,103 @@ namespace Jack.Storage.MemoryObjects
                         throw new Exception($"{key} exist");
                     }
                 }
+
+                if (_netClient == null)
+                {
+                    _backupQueue.Enqueue(new OpAction<T>()
+                    {
+                        Type = ActionType.Update,
+                        Data = item
+                    });
+                    _backupEvent.Set();
+                }
+                else
+                {
+                    _netClient.Send<T>(new OpAction<T>()
+                    {
+                        Type = ActionType.Update,
+                        Data = item
+                    });
+                }
             }
-            _backupQueue.Enqueue(new OpAction<T>()
-            {
-                Type = ActionType.Update,
-                Data = item
-            });
-            _backupEvent.Set();
+          
+
+           
         }
         public void Remove(T item)
         {
+            if (item == null)
+                return;
             lock (_dataList)
             {
                 _dataList.Remove(item);
-            }
 
-            _backupQueue.Enqueue(new OpAction<T>()
-            {
-                Type = ActionType.Remove,
-                Data = item
-            });
-            _backupEvent.Set();
+                if (_netClient == null)
+                {
+                    _backupQueue.Enqueue(new OpAction<T>()
+                    {
+                        Type = ActionType.Remove,
+                        Data = item
+                    });
+                    _backupEvent.Set();
+                }
+                else
+                {
+                    _netClient.Send<T>(new OpAction<T>()
+                    {
+                        Type = ActionType.Remove,
+                        Data = item
+                    });
+                }
+            } 
         }
         public void Remove(IEnumerable<T> list)
         {
+            if (list == null)
+                return;
             var arr = list.ToArray();
             lock (_dataList)
             {
                 foreach( var item in arr)
                 {
-                    _dataList.Remove(item);
-                }                
-            }
+                    if(item != null)
+                    {
+                        _dataList.Remove(item);
+                    }                    
+                }
 
-            foreach (var item in arr)
-            {
-                _backupQueue.Enqueue(new OpAction<T>()
+                if (_netClient == null)
                 {
-                    Type = ActionType.Remove,
-                    Data = item
-                });
+                    foreach (var item in arr)
+                    {
+                        if (item != null)
+                        {
+                            _backupQueue.Enqueue(new OpAction<T>()
+                            {
+                                Type = ActionType.Remove,
+                                Data = item
+                            });
+                        }
+                    }
+
+                    _backupEvent.Set();
+                }
+                else
+                {
+                    foreach (var item in arr)
+                    {
+                        if (item != null)
+                        {
+                            _netClient.Send<T>(new OpAction<T>()
+                            {
+                                Type = ActionType.Remove,
+                                Data = item
+                            });
+                        }
+                    }
+                }
             }
            
-            _backupEvent.Set();
         }
 
         public IEnumerator<T> GetEnumerator()

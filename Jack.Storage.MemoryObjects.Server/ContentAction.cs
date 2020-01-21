@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Jack.Storage.MemoryObjects
+namespace Jack.Storage.MemoryObjects.Server
 {
-    class OpAction<T>
+    class ContentAction
     {
         public ActionType Type;
-        public T Data;
+        public string KeyValue;
+        public string Data;
     }
     enum ActionType
     {

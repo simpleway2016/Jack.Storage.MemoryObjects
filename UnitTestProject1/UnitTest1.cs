@@ -12,8 +12,7 @@ namespace UnitTestProject1
         [TestMethod]
         public void Normal()
         {
-            var filepath = "./temp.db";
-            System.IO.File.Delete(filepath);
+            var filepath = "temp";
 
             var context = new StorageContext<MyDataItem>(filepath, "Name" );
             context.Add(new MyDataItem() { 
@@ -30,13 +29,14 @@ namespace UnitTestProject1
             context.Remove(context.Where(m => m.Name.Contains("My")));
 
             context.Dispose();
+            System.IO.File.Delete(filepath);
         }
 
         [TestMethod]
         public void RepeatCheck()
         {
-            var filepath = "./temp.db";
-            System.IO.File.Delete(filepath);
+            var filepath = "RepeatCheck";
+            
 
             var context = new StorageContext<MyDataItem>(filepath, "Name" , true);
             context.Add(new MyDataItem()
@@ -61,13 +61,15 @@ namespace UnitTestProject1
             }
 
             context.Dispose();
+
+            System.IO.File.Delete(filepath);
         }
 
         [TestMethod]
         public void Add()
         {
-            var filepath = "./test.db";
-            System.IO.File.Delete(filepath);
+            var filepath = "Add";
+           
 
             var context = new StorageContext<MyDataItem>(filepath, "Name");
             System.Threading.Tasks.Parallel.For(0, 10000, (i) => {
@@ -81,7 +83,7 @@ namespace UnitTestProject1
 
             context.Dispose();
 
-            context = new StorageContext<MyDataItem>("./test.db", "Name");
+            context = new StorageContext<MyDataItem>(filepath, "Name");
             if (context.Count != 10000)
                 throw new Exception("数量不对");
 
@@ -90,13 +92,15 @@ namespace UnitTestProject1
                 if(context.Any(m=>m.Name == "Jack" + i) == false)
                     throw new Exception("没有这个对象");
             }
+
+            System.IO.File.Delete(filepath);
         }
 
         [TestMethod]
         public void Update()
         {
-            var filepath = "./test_Update.db";
-            System.IO.File.Delete(filepath);
+            var filepath = "Update";
+          
 
             var context = new StorageContext<MyDataItem>(filepath, "Name");
             System.Threading.Tasks.Parallel.For(0, 10, (i) => {
@@ -123,13 +127,15 @@ namespace UnitTestProject1
             obj = context.FirstOrDefault(m => m.Name == "Jack5");
             if (obj.Company != "abc")
                 throw new Exception("数据错误");
+
+            System.IO.File.Delete(filepath);
         }
 
         [TestMethod]
         public void Remove()
         {
-            var filepath = "./test2.db";
-            System.IO.File.Delete(filepath);
+            var filepath = "Remove";
+         
 
             var context = new StorageContext<MyDataItem>(filepath, "Name");
             System.Threading.Tasks.Parallel.For(0, 10000, (i) => {
@@ -158,6 +164,9 @@ namespace UnitTestProject1
             context = new StorageContext<MyDataItem>(filepath, "Name");
             if (context.Count != 0)
                 throw new Exception("数量不对");
+
+
+            System.IO.File.Delete(filepath);
         }
     }
 

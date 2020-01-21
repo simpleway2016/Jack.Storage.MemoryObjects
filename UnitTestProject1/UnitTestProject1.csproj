@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Jack.Storage.MemoryObjects.Server\Jack.Storage.MemoryObjects.Server.csproj" />
     <ProjectReference Include="..\Jack.Storage.MemoryObjects\Jack.Storage.MemoryObjects.csproj" />
   </ItemGroup>
 

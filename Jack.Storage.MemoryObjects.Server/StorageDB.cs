@@ -1,34 +1,39 @@
 ﻿using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using Way.Lib;
 
-namespace Jack.Storage.MemoryObjects
+namespace Jack.Storage.MemoryObjects.Server
 {
     class StorageDB:IDisposable
     {
         SqliteConnection _sqlCon;
         SqliteConnection _sqlConForDelete;
-        PropertyInfo _pro;
-        ILogger _logger;
-        public StorageDB(string filepath,PropertyInfo property, ILogger logger)
+        string _propertyName;
+        Way.Lib.CLog _log;
+        Type _keytype;
+        string FilePath { get; }
+        public StorageDB(string filepath,string propertyName,string propertyType)
         {
-            _logger = logger;
-            _pro = property;
-            if( System.IO.Directory.Exists(Path.GetDirectoryName(filepath)) == false )
+            this.FilePath = filepath;
+            _log = new Way.Lib.CLog(Path.GetFileName(filepath) + ".Error" , false);
+               _propertyName = propertyName;
+            _keytype = typeof(long).Assembly.GetType(propertyType);
+
+            if (System.IO.Directory.Exists(Path.GetDirectoryName(filepath)) == false)
             {
                 System.IO.Directory.CreateDirectory(Path.GetDirectoryName(filepath));
             }
 
-               _sqlCon = new SqliteConnection($"Data Source=\"{filepath}\"");
+            _sqlCon = new SqliteConnection($"Data Source=\"{filepath}\"");
             _sqlCon.Open();
             FixFileSize();
             if(isTableExist("main") == false)
             {
-                CreateTable(_pro.PropertyType);
+                CreateTable();
             }
 
             _sqlConForDelete = new SqliteConnection($"Data Source=\"{filepath}\"");
@@ -99,14 +104,15 @@ ADD [{fieldName}] {fieldType}
                 cmd.ExecuteNonQuery();
             }
         }
-        void CreateTable(Type keytype)
+        void CreateTable()
         {
             string type = "INTEGER";
-           if(keytype == typeof(long))
+           
+           if (_keytype == typeof(long))
             {
                 type = "BIGINT";
             }
-            else if (keytype == typeof(string))
+            else if (_keytype == typeof(string))
             {
                 type = "TEXT";
             }
@@ -135,7 +141,7 @@ CREATE INDEX primary_index ON [main] (
 
         }
 
-        public void ReadData<T>(Action<T> callback)
+        public void ReadData(Action<string> callback)
         {
             using (var cmd = _sqlCon.CreateCommand())
             {
@@ -144,7 +150,7 @@ CREATE INDEX primary_index ON [main] (
                 while (reader.Read())
                 {
                     string content = (string)reader["Content"];
-                    callback(Newtonsoft.Json.JsonConvert.DeserializeObject<T>(content));
+                    callback(content);
                 }
                 reader.Close();
             }
@@ -157,7 +163,7 @@ CREATE INDEX primary_index ON [main] (
                 return cmd.ExecuteScalar();
             }
         }
-        public void Handle<T>(System.Collections.IEnumerable list)
+        public void Handle(System.Collections.IEnumerable list)
         {
             var tran = _sqlCon.BeginTransaction();
             try
@@ -165,12 +171,11 @@ CREATE INDEX primary_index ON [main] (
                 using (var cmd = _sqlCon.CreateCommand())
                 {
                     cmd.Transaction = tran;
-                    foreach (OpAction<T> item in list)
+                    foreach (ContentAction item in list)
                     {
                         var data = item.Data;
-                        
-                        var key = _pro.GetValue(data);
 
+                        var key = Convert.ChangeType(item.KeyValue, _keytype);
                         if (item.Type == ActionType.Add)
                         {
                             cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
@@ -181,15 +186,7 @@ CREATE INDEX primary_index ON [main] (
 
                             p = cmd.CreateParameter();
                             p.ParameterName = "p1";
-                            try
-                            {
-                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
-                                p.Value = ex.Message;
-                            }
+                            p.Value = data;
                             cmd.Parameters.Add(p);
 
                             p = cmd.CreateParameter();
@@ -210,15 +207,7 @@ CREATE INDEX primary_index ON [main] (
 
                             p = cmd.CreateParameter();
                             p.ParameterName = "p1";
-                            try
-                            {
-                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
-                                p.Value = ex.Message;
-                            }
+                            p.Value = data;
                             cmd.Parameters.Add(p);
 
                         }
@@ -230,6 +219,10 @@ CREATE INDEX primary_index ON [main] (
                             p.Value = key;
                             cmd.Parameters.Add(p);
                         }
+                        else if (item.Type == ActionType.DeleteFile)
+                        {
+                            cmd.CommandText = $"delete from [main]";
+                        }
                         cmd.ExecuteNonQuery();
                         cmd.Parameters.Clear();
                     }
@@ -239,7 +232,7 @@ CREATE INDEX primary_index ON [main] (
             catch (Exception ex)
             {
                 tran.Rollback();
-                _logger?.LogError("write file error. \r\n{0}",ex.ToString());
+                _log.Log("write file error. \r\n{0}",ex.ToString());
             }
            
         }
