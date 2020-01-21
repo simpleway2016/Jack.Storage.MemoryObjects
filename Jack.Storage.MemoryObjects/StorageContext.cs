@@ -76,7 +76,8 @@ namespace Jack.Storage.MemoryObjects
         /// <param name="port">端口</param>
         /// <param name="storageName">保存的名称</param>
         /// <param name="primaryPropertyName">主键属性的名称，必须是long、int、string类型</param>
-        public StorageContext(string serverAddr,int port,string storageName, string primaryPropertyName)
+        /// <param name="isAsync">是否异步发送到服务器，同步对于文件写入有保证，异步对于性能有提升</param>
+        public StorageContext(string serverAddr,int port,string storageName, string primaryPropertyName, bool isAsync = false)
         {
             var filepath = "./data/" + storageName + ".db";
             if (string.IsNullOrEmpty(filepath))
@@ -97,13 +98,29 @@ namespace Jack.Storage.MemoryObjects
             }
             this.StorageName = storageName;
 
-            _netClient = new Client<T>(serverAddr, port, _propertyInfo, new CommandHeader() { 
-                FilePath = filepath,
-                KeyName = primaryPropertyName,
-                KeyType = _propertyInfo.PropertyType.FullName
-            }, (item) => {
-                _dataList.Add(item);
-            });
+            if(isAsync)
+            {
+                _netClient = new ClientAsync<T>(serverAddr, port, _propertyInfo, new CommandHeader()
+                {
+                    FilePath = filepath,
+                    KeyName = primaryPropertyName,
+                    KeyType = _propertyInfo.PropertyType.FullName
+                }, (item) => {
+                    _dataList.Add(item);
+                });
+            }
+            else
+            {
+                _netClient = new Client<T>(serverAddr, port, _propertyInfo, new CommandHeader()
+                {
+                    FilePath = filepath,
+                    KeyName = primaryPropertyName,
+                    KeyType = _propertyInfo.PropertyType.FullName
+                }, (item) => {
+                    _dataList.Add(item);
+                });
+            }
+            
 
         }
 
@@ -155,18 +172,16 @@ namespace Jack.Storage.MemoryObjects
 
         void DeleteFile()
         {
-            if(_netClient != null)
+           
+            lock(_dataList)
             {
-                lock (_netClient)
+                if (_netClient != null)
                 {
                     _netClient.Send(new OpAction<T>()
                     {
                         Type = ActionType.DeleteFile,
                     });
                 }
-            }
-            lock(_dataList)
-            {
                 this._dataList.Clear();
 
             }
