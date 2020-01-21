@@ -33,7 +33,7 @@ namespace UnitTestProject1
             watch.Stop();
             Debug.WriteLine($"×ÜºÄÊ±£º{watch.ElapsedMilliseconds}ms");
 
-            var ret = rds.Get("Jack1000");
+           
         }
 
        
