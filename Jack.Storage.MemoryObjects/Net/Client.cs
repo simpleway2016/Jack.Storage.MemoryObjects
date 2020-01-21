@@ -46,6 +46,7 @@ namespace Jack.Storage.MemoryObjects.Net
             var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
             _stream.Write(bs.Length);
             _stream.Write(bs);
+
         }
 
         /// <summary>
