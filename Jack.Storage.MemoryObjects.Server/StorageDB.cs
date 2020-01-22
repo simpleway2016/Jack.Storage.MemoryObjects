@@ -143,8 +143,10 @@ CREATE INDEX primary_index ON [main] (
 
         public void ReadData(Action<string> callback)
         {
+            var tran = _sqlCon.BeginTransaction(System.Data.IsolationLevel.ReadUncommitted);
             using (var cmd = _sqlCon.CreateCommand())
             {
+                cmd.Transaction = tran;
                 cmd.CommandText = $"select * from [main]";
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -154,6 +156,7 @@ CREATE INDEX primary_index ON [main] (
                 }
                 reader.Close();
             }
+            tran.Commit();
         }
         public object Exec(string sql)
         {
@@ -165,7 +168,7 @@ CREATE INDEX primary_index ON [main] (
         }
         public void Handle(System.Collections.IEnumerable list)
         {
-            var tran = _sqlCon.BeginTransaction();
+            var tran = _sqlCon.BeginTransaction(System.Data.IsolationLevel.ReadUncommitted);
             try
             {
                 using (var cmd = _sqlCon.CreateCommand())
