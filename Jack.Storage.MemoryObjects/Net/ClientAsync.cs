@@ -18,7 +18,7 @@ namespace Jack.Storage.MemoryObjects.Net
         string _server;
         int _port;
         CommandHeader _header;
-        public ClientAsync(string server, int port, PropertyInfo propertyInfo, CommandHeader header, Action<T> callback):base(null,0,null,null,null)
+        public ClientAsync(string server, int port, PropertyInfo propertyInfo, CommandHeader header, Action<T> callback) : base(null, 0, null, null, null)
         {
             _server = server;
             _port = port;
@@ -50,6 +50,7 @@ namespace Jack.Storage.MemoryObjects.Net
         }
         void runForSend()
         {
+            var buffer = new List<byte>(20480);
             while (!_disposed || _queue.Count > 0)
             {
                 _event.WaitOne();
@@ -60,18 +61,27 @@ namespace Jack.Storage.MemoryObjects.Net
                     while (!_disposed)
                     {
                         try
-                        {                           
+                        {
                             ContentAction action = new ContentAction();
                             action.Type = item.Type;
-                            
+
                             if (item.Data != null)
                             {
                                 action.KeyValue = _propertyInfo.GetValue(item.Data).ToString();
                                 action.Data = item.Data.ToJsonString();
                             }
                             var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
-                            _stream.Write(bs.Length);
-                            _stream.Write(bs);
+                            var lenbs = BitConverter.GetBytes(bs.Length);
+                            buffer.AddRange(lenbs);
+                            buffer.AddRange(bs);
+
+                            if (buffer.Count > 10240)
+                            {
+                                bs = buffer.ToArray();
+                                buffer.Clear();
+                                _stream.Write(bs);
+                            }
+
                             if (item.CallBack != null)
                             {
                                 item.CallBack();
@@ -79,6 +89,13 @@ namespace Jack.Storage.MemoryObjects.Net
 
                             if (item.Type == ActionType.CheckSaved)
                             {
+                                if (buffer.Count > 0)
+                                {
+                                    bs = buffer.ToArray();
+                                    buffer.Clear();
+                                    _stream.Write(bs);
+                                }
+
                                 try
                                 {
                                     _stream.ReadBoolean();
@@ -108,6 +125,7 @@ namespace Jack.Storage.MemoryObjects.Net
                     }
                 }
             }
+
             _stream.Dispose();
         }
 
@@ -127,7 +145,8 @@ namespace Jack.Storage.MemoryObjects.Net
             _queue.Enqueue(new OpAction<T>()
             {
                 Type = ActionType.CheckSaved,
-                CallBack = () => {
+                CallBack = () =>
+                {
                     mywait.Set();
                 }
 
