@@ -151,7 +151,9 @@ namespace Jack.Storage.MemoryObjects
             }
             _backupExited = true;
         }
-
+        /// <summary>
+        /// 释放对象，并保证所有数据已经同步到文件
+        /// </summary>
         public void Dispose()
         {
             if (_netClient == null)
@@ -168,6 +170,7 @@ namespace Jack.Storage.MemoryObjects
                 _netClient.CheckAllSaved();
                 _netClient.Dispose();
             }
+            _dataList.Clear();
         }
 
         void DeleteFile()
