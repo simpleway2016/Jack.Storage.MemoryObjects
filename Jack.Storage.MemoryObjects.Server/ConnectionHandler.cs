@@ -26,30 +26,30 @@ namespace Jack.Storage.MemoryObjects.Server
 
         public void Handle()
         {
-            int len = _client.ReadInt();
-            var header = Encoding.UTF8.GetString( _client.ReceiveDatas(len)).FromJson<CommandHeader>();
-            this.FilePath = header.FilePath;
-            ConnectionHelper.Register(this);
-
-            _db = new StorageDB(header.FilePath, header.KeyName, header.KeyType);
-
-            //读取现有数据
-            if (header.ReadData)
-            {
-                _db.ReadData((content) =>
-                {
-                    var bs = Encoding.UTF8.GetBytes(content);
-                    _client.Write(bs.Length);
-                    _client.Write(bs);
-                });
-                _client.Write((int)-1);
-            }
-            _ready = true;
-
-            new Thread(processAction).Start();
-
             try
             {
+                int len = _client.ReadInt();
+                var header = Encoding.UTF8.GetString(_client.ReceiveDatas(len)).FromJson<CommandHeader>();
+                this.FilePath = header.FilePath;
+                //ConnectionHelper.Register(this);
+
+                _db = new StorageDB(header.FilePath, header.KeyName, header.KeyType);
+
+                //读取现有数据
+                if (header.ReadData)
+                {
+                    _db.ReadData((content) =>
+                    {
+                        var bs = Encoding.UTF8.GetBytes(content);
+                        _client.Write(bs.Length);
+                        _client.Write(bs);
+                    });
+                    _client.Write((int)-1);
+                }
+                _ready = true;
+
+                new Thread(processAction).Start();
+
                 while (true)
                 {
                     len = _client.ReadInt();
@@ -72,9 +72,40 @@ namespace Jack.Storage.MemoryObjects.Server
 
             }
 
-            ConnectionHelper.UnRegister(this);
+            //ConnectionHelper.UnRegister(this);
             _exited = true;
             _client.Dispose();
+        }
+
+        /// <summary>
+        /// 设计中
+        /// </summary>
+        /// <param name="buffer"></param>
+        public void SendToClient(List<ContentAction> buffer)
+        {
+            while(!_ready)
+            {
+                if (_exited)
+                    return;
+
+                Thread.Sleep(100);
+            }
+
+            //发送给客户端
+            try
+            {
+                foreach (var action in buffer)
+                {
+                    var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
+                    _client.Write(bs.Length);
+                    _client.Write(bs);
+                }
+            }
+            catch
+            {
+                _client.Dispose();
+            }
+           
         }
 
         void processAction()
@@ -97,7 +128,7 @@ namespace Jack.Storage.MemoryObjects.Server
 
                 if (buffer.Count > 0)
                 {
-                    ConnectionHelper.Broadcast(this, buffer);
+                    //ConnectionHelper.Broadcast(this, buffer);
                     _db.Handle(buffer);
                 }
 
