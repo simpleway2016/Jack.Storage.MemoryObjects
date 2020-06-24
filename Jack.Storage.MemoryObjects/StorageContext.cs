@@ -21,7 +21,9 @@ namespace Jack.Storage.MemoryObjects
 
 
         bool _disposed = false;
-        List<T> _dataList = new List<T>();
+        List<int> _freeIndex = new List<int>();
+
+        List<DataItem<T>> _dataList = new List<DataItem<T>>();
         ConcurrentQueue<OpAction<T>> _backupQueue = new ConcurrentQueue<OpAction<T>>();
         System.Threading.ManualResetEvent _backupEvent = new System.Threading.ManualResetEvent(false);
         bool _backupExited = false;
@@ -64,7 +66,7 @@ namespace Jack.Storage.MemoryObjects
             _db = new StorageDB(filepath , _propertyInfo , logger);
 
             _db.ReadData<T>((item) => {
-                _dataList.Add(item);
+                _dataList.Add(new DataItem<T>(item));
             });
 
             new Thread(backupRunning).Start();
@@ -106,7 +108,7 @@ namespace Jack.Storage.MemoryObjects
                     KeyName = primaryPropertyName,
                     KeyType = _propertyInfo.PropertyType.FullName
                 }, (item) => {
-                    _dataList.Add(item);
+                    _dataList.Add(new DataItem<T>(item));
                 });
             }
             else
@@ -117,14 +119,14 @@ namespace Jack.Storage.MemoryObjects
                     KeyName = primaryPropertyName,
                     KeyType = _propertyInfo.PropertyType.FullName
                 }, (item) => {
-                    _dataList.Add(item);
+                    _dataList.Add(new DataItem<T>(item));
                 });
             }
             
 
         }
 
-
+      
         void backupRunning()
         {
             while(!_disposed || _backupQueue.Count > 0)
@@ -201,12 +203,20 @@ namespace Jack.Storage.MemoryObjects
             {
                 if (_checkRepeatPrimaryKey)
                 {
-                    var _whereQuery = LinqHelper.InvokeWhereEquals(_dataList.AsQueryable<T>(), _propertyInfo.Name, key);
+                    var _whereQuery = LinqHelper.InvokeWhereEquals(_dataList.Where(m=> m != null).Select(m=>m.Data).AsQueryable<T>(), _propertyInfo.Name, key);
                     if (LinqHelper.InvokeAny(_whereQuery))
                     {
                         throw new Exception($"{key} exist");
                     }
-                    _dataList.Add(item);
+                    if (_freeIndex.Count > 0)
+                    {
+                        _dataList[_freeIndex[0]] = new DataItem<T>(item);
+                        _freeIndex.RemoveAt(0);
+                    }
+                    else
+                    {
+                        _dataList.Add(new DataItem<T>(item));
+                    }
                 }
                 else
                 {
@@ -214,7 +224,15 @@ namespace Jack.Storage.MemoryObjects
                     //if (_dataList.Contains(item))
                     //    throw new Exception($"此对象已经在集合当中，不能重复添加");
 
-                    _dataList.Add(item);
+                    if (_freeIndex.Count > 0)
+                    {
+                        _dataList[_freeIndex[0]] = new DataItem<T>(item);
+                        _freeIndex.RemoveAt(0);
+                    }
+                    else
+                    {
+                        _dataList.Add(new DataItem<T>(item));
+                    }
                 }
 
                 if (_netClient == null)
@@ -250,7 +268,7 @@ namespace Jack.Storage.MemoryObjects
             {
                 if (_checkRepeatPrimaryKey)
                 {
-                    var _whereQuery = LinqHelper.InvokeWhereEquals(_dataList.Where(m=>m.Equals(item) == false).AsQueryable<T>(), _propertyInfo.Name, key);
+                    var _whereQuery = LinqHelper.InvokeWhereEquals(_dataList.Where(m=>m != null && m.Data.Equals(item) == false).Select(m=>m.Data).AsQueryable<T>(), _propertyInfo.Name, key);
                     if (LinqHelper.InvokeAny(_whereQuery))
                     {
                         throw new Exception($"{key} exist");
@@ -283,9 +301,14 @@ namespace Jack.Storage.MemoryObjects
         {
             if (item == null)
                 return;
+            var index = _dataList.IndexOf(item);
+            if (index < 0)
+                return;
+            
             lock (_dataList)
             {
-                _dataList.Remove(item);
+                _dataList[index] = null;
+                _freeIndex.Add(index);
 
                 if (_netClient == null)
                 {
@@ -304,20 +327,28 @@ namespace Jack.Storage.MemoryObjects
                         Data = item
                     });
                 }
-            } 
+            }
         }
         public void Remove(IEnumerable<T> list)
         {
             if (list == null)
                 return;
             var arr = list.ToArray();
+            if (arr.Length == 0)
+                return;
+
             lock (_dataList)
             {
                 foreach( var item in arr)
                 {
                     if(item != null)
                     {
-                        _dataList.Remove(item);
+                        var index = _dataList.IndexOf(item);
+                        if (index >= 0)
+                        {
+                            _dataList[index] = null;
+                            _freeIndex.Add(index);
+                        }
                     }                    
                 }
 
@@ -352,12 +383,14 @@ namespace Jack.Storage.MemoryObjects
                     }
                 }
             }
-           
+
         }
 
+        DateTime _lastGetEnumeratorTime = DateTime.Now;
         public IEnumerator<T> GetEnumerator()
         {
-            return _dataList.GetEnumerator();
+            _lastGetEnumeratorTime = DateTime.Now;
+              return new StorageContextEnumerator<T>(_dataList);
         }
 
         IEnumerator IEnumerable.GetEnumerator()

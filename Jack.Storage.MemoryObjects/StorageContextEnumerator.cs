@@ -7,11 +7,12 @@ namespace Jack.Storage.MemoryObjects
 {
     class StorageContextEnumerator<T> : IEnumerator<T>
     {
-        List<T> _source;
+        List<DataItem<T>> _source;
         int _position = 0;
-        public StorageContextEnumerator(List<T> source)
+        public StorageContextEnumerator(List<DataItem<T>> source)
         {
             _source = source;
+            this.Reset();
         }
 
         public T Current
@@ -20,14 +21,7 @@ namespace Jack.Storage.MemoryObjects
             {
                 if (_position < _source.Count)
                 {
-                    try
-                    {
-                        return _source[_position];
-                    }
-                    catch
-                    {
-                        return default(T);
-                    }
+                    return _source[_position].Data;
                 }
 
                 return default(T);
@@ -43,17 +37,24 @@ namespace Jack.Storage.MemoryObjects
 
         public bool MoveNext()
         {
-            if (_position < _source.Count - 1)
+            _position++;
+            while (_position < _source.Count && _source[_position] == null)
             {
                 _position++;
-                return true;
             }
-            return false;
+
+
+            return _position < _source.Count;
         }
 
         public void Reset()
         {
             _position = 0;
+            while (_position < _source.Count && _source[_position] == null)
+            {
+                _position++;
+            }
+
         }
     }
 }

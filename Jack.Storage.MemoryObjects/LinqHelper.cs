@@ -7,9 +7,26 @@ using System.Text;
 
 namespace Jack.Storage.MemoryObjects
 {
-    class LinqHelper
+    static class LinqHelper
     {
         static MethodInfo AnyMethod;
+        public static int IndexOf<T>(this List<DataItem<T>> list , T item)
+        {
+            for(int i = 0; i < list.Count; i ++)
+            {
+                try
+                {
+                    if (list[i].Data.Equals(item))
+                        return i;
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    return -1;
+                }
+               
+            }
+            return -1;
+        }
         public static System.Linq.Expressions.Expression GetPropertyExpression(ParameterExpression param, Type dataType, string propertyName, out PropertyInfo propertyInfo)
         {
             System.Linq.Expressions.Expression left = null;
