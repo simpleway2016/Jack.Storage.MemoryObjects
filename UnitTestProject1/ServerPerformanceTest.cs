@@ -50,6 +50,11 @@ namespace UnitTestProject1
             Debug.WriteLine($"写入文件总耗时：{watch2.ElapsedMilliseconds}ms");
 
         }
+
+
+        /// <summary>
+        /// 异步模式，高性能
+        /// </summary>
         [TestMethod]
         public void AddAsync()
         {
