@@ -362,7 +362,9 @@ namespace Jack.Storage.MemoryObjects
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return _dataList.GetEnumerator();
+            return this.GetEnumerator();
         }
+
+      
     }
 }

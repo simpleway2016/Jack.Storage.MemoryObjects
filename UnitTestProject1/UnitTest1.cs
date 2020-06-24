@@ -3,6 +3,9 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading;
 using System.Linq;
 using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Collections;
 
 namespace UnitTestProject1
 {
@@ -167,6 +170,119 @@ namespace UnitTestProject1
 
 
             System.IO.File.Delete(filepath);
+        }
+
+        [TestMethod]
+        public void Test()
+        {
+            List<int> data = new List<int>();
+            Task.Run(()=> {
+                int index = 0;
+               while(true)
+                {
+                    data.Add(index++);
+                }
+            });
+
+            Task.Run(() => {
+                var enumtor = new MyEnumable<int>(data);
+               while (true)
+                {
+                    try
+                    {
+                       var d = enumtor.Where(m => m % 2 == 0).Take(100).ToArray();
+                    }
+                    catch(System.InvalidOperationException ex)
+                    {
+                        if(ex.HResult == -2146233079)
+                        {
+
+                        }
+                        else
+                        {
+                            throw ex;
+                        }
+                    }
+                }
+            });
+
+            Thread.Sleep(1000000);
+        }
+    }
+
+    class MyEnumable<T> : IEnumerable<T>
+    {
+        List<T> _source;
+        public MyEnumable(List<T> source)
+        {
+            _source = source;
+        }
+        public IEnumerator<T> GetEnumerator()
+        {
+            return new MyEnumerator<T>(_source);
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return this.GetEnumerator();
+        }
+    }
+
+    class MyEnumerator<T>: IEnumerator<T>
+    {
+        List<T> _source;
+        int _position = 0;
+        public MyEnumerator(List<T> source)
+        {
+            _source = source;
+        }
+
+        public T Current
+        {
+            get
+            {
+                if( _position < _source.Count )
+                {
+                    try
+                    {
+                        return _source[_position];
+                    }
+                    catch 
+                    {
+                        return default(T);
+                    }
+                }
+
+                return default(T);
+            }
+        }
+
+        object IEnumerator.Current
+        {
+            get
+            {
+                return this.Current;
+            }
+        }
+
+        public void Dispose()
+        {
+           
+        }
+
+        public bool MoveNext()
+        {
+            if (_position < _source.Count - 1)
+            {
+                _position++;
+                return true;
+            }
+            return false;
+        }
+
+        public void Reset()
+        {
+            _position = 0;
         }
     }
 
