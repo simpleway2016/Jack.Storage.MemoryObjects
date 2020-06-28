@@ -386,10 +386,8 @@ namespace Jack.Storage.MemoryObjects
 
         }
 
-        DateTime _lastGetEnumeratorTime = DateTime.Now;
         public IEnumerator<T> GetEnumerator()
         {
-            _lastGetEnumeratorTime = DateTime.Now;
               return new StorageContextEnumerator<T>(_dataList);
         }
 
