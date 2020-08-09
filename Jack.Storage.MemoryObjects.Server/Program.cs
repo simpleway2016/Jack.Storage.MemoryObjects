@@ -16,6 +16,7 @@ namespace Jack.Storage.MemoryObjects.Server
             try
             {
                 server.Run();
+                Console.WriteLine("server started,port:" + server.Config.Port);
                 ManualResetEvent _mainEvent = new ManualResetEvent(false);
                 _mainEvent.WaitOne();
             }

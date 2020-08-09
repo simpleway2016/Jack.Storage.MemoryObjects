@@ -105,6 +105,7 @@ namespace Jack.Storage.MemoryObjects
                 _netClient = new ClientAsync<T>(serverAddr, port, _propertyInfo, new CommandHeader()
                 {
                     FilePath = filepath,
+                    IsAsync =true,
                     KeyName = primaryPropertyName,
                     KeyType = _propertyInfo.PropertyType.FullName
                 }, (item) => {

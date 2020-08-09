@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using Way.Lib;
 
@@ -17,6 +19,7 @@ namespace Jack.Storage.MemoryObjects.Net
 
             _propertyInfo = propertyInfo;
             _stream = new NetStream(server, port);
+            _stream.Socket.NoDelay = true;
             var content = header.ToJsonString();
             var bs = Encoding.UTF8.GetBytes(content);
             _stream.Write(bs.Length);
@@ -34,7 +37,7 @@ namespace Jack.Storage.MemoryObjects.Net
         }
 
 
-        public virtual void Send(OpAction<T> item)
+        public virtual unsafe void Send(OpAction<T> item)
         {
             ContentAction action = new ContentAction();
             action.Type = item.Type;
@@ -44,9 +47,18 @@ namespace Jack.Storage.MemoryObjects.Net
                 action.Data = item.Data.ToJsonString();
             }
             var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
-            _stream.Write(bs.Length);
-            _stream.Write(bs);
+            var sendData = new byte[bs.Length + 4];
 
+            fixed(byte* ptrBs = bs)
+            {
+                Marshal.Copy(new IntPtr(ptrBs), sendData, 4, bs.Length);
+                int len = bs.Length;
+                byte* ptr = (byte*)&len;
+                Marshal.Copy(new IntPtr(ptr), sendData, 0, 4);
+            }
+
+            _stream.Write(sendData);
+            _stream.ReadBoolean();
         }
 
         /// <summary>

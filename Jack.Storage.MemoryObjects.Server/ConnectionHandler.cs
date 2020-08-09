@@ -21,6 +21,7 @@ namespace Jack.Storage.MemoryObjects.Server
         public ConnectionHandler(Socket socket)
         {
             _client = new Way.Lib.NetStream(socket);
+            socket.NoDelay = true;
         }
 
 
@@ -63,6 +64,11 @@ namespace Jack.Storage.MemoryObjects.Server
 
                         break;
                     }
+                    else
+                    {
+                        if(!header.IsAsync)
+                            _client.Write(true);
+                    }
                     _backupQueue.Enqueue(action);
                     _backupEvent.Set();
                 }
@@ -77,37 +83,7 @@ namespace Jack.Storage.MemoryObjects.Server
             _client.Dispose();
         }
 
-        /// <summary>
-        /// 设计中
-        /// </summary>
-        /// <param name="buffer"></param>
-        public void SendToClient(List<ContentAction> buffer)
-        {
-            while(!_ready)
-            {
-                if (_exited)
-                    return;
-
-                Thread.Sleep(100);
-            }
-
-            //发送给客户端
-            try
-            {
-                foreach (var action in buffer)
-                {
-                    var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
-                    _client.Write(bs.Length);
-                    _client.Write(bs);
-                }
-            }
-            catch
-            {
-                _client.Dispose();
-            }
-           
-        }
-
+        
         void processAction()
         {
             while (!_exited || _backupQueue.Count > 0)
@@ -128,7 +104,6 @@ namespace Jack.Storage.MemoryObjects.Server
 
                 if (buffer.Count > 0)
                 {
-                    //ConnectionHelper.Broadcast(this, buffer);
                     _db.Handle(buffer);
                 }
 

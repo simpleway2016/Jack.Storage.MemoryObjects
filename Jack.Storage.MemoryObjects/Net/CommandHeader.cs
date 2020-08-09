@@ -9,6 +9,7 @@ namespace Jack.Storage.MemoryObjects
         public string FilePath;
         public string KeyName;
         public string KeyType;
+        public bool IsAsync = false;
         public bool ReadData = true;
     }
 }

@@ -13,7 +13,7 @@ namespace UnitTestProject1
     {
         static ServerPerformanceTest()
         {
-            var p = new ServerTest();
+            //var p = new ServerTest();
         }
 
         [TestMethod]

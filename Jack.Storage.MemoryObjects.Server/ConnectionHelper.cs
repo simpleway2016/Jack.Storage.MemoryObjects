@@ -31,23 +31,5 @@ namespace Jack.Storage.MemoryObjects.Server
             }
         }
 
-        public static void Broadcast(ConnectionHandler from , List<ContentAction> buffer)
-        {
-            for(int i = 0; i < ExistHandlers.Count; i ++)
-            {
-                try
-                {
-                    var item = ExistHandlers[i];
-                    if(item != null && item == from && item.FilePath == from.FilePath )
-                    {
-                        item.SendToClient(buffer);
-                    }
-                }
-                catch
-                {
-
-                }
-            }
-        }
     }
 }

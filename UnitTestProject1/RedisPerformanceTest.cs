@@ -16,7 +16,6 @@ namespace UnitTestProject1
         public void Add()
         {
             var rds = new CSRedis.CSRedisClient("127.0.0.1:6379,password=,defaultDatabase=8,poolsize=50,ssl=false,writeBuffer=10240");
-
             System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
             System.Diagnostics.Stopwatch watch2 = new System.Diagnostics.Stopwatch();
             watch2.Start();
