@@ -6,12 +6,41 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Concurrent;
 
 namespace UnitTestProject1
 {
     [TestClass]
     public class UnitTest1
     {
+
+        [TestMethod]
+        public void testDict()
+        {
+            ConcurrentDictionary<MyDataItem, bool> dict = new ConcurrentDictionary<MyDataItem, bool>();
+            Task.Run(()=> { 
+            while(true)
+                {
+                    var list = dict.Select(m => m.Key);
+                    foreach( var item in list )
+                    {
+
+                    }
+                    Thread.Sleep(0);
+                }
+            });
+
+            Task.Run(() => {
+                while (true)
+                {
+                    dict.TryAdd(new MyDataItem(), true);
+                    Thread.Sleep(0);
+                }
+            });
+
+            Thread.Sleep(10000000);
+        }
+
         [TestMethod]
         public void Normal()
         {
