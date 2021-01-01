@@ -3,7 +3,7 @@ using System;
 using Jack.Storage.MemoryObjects;
 using System.Diagnostics;
 using System.Linq;
-
+using Jack.Storage.MemoryObjects;
 namespace UnitTestProject2
 {
     class MyObject
@@ -35,5 +35,91 @@ namespace UnitTestProject2
             Debug.WriteLine("耗时" + sw.ElapsedMilliseconds);
             ctx.Dispose();
         }
+
+        [TestMethod]
+        public void TestDelete()
+        {
+          
+            var ctx = new StorageContext<PlayListItem>("PlayList", "Id", @"C:\Users\89687\AppData\Local\Monster Audio\KaraokeData");
+
+            foreach( var item in ctx )
+            {
+                ctx.Remove(item);
+            }
+           
+            ctx.Dispose();
+        }
+    }
+
+    public class PlayListItem 
+    {
+        long _Id;
+
+        public long Id
+        {
+
+
+            get
+            {
+                return _Id;
+            }
+            set
+            {
+                if (_Id != value)
+                {
+                    _Id = value;
+                   
+                }
+            }
+        }
+
+        long _SongId;
+        public long SongId
+        {
+            get
+            {
+                return _SongId;
+            }
+            set
+            {
+                if (_SongId != value)
+                {
+                    _SongId = value;
+                }
+            }
+        }
+
+        int _OrderNumber;
+        public int OrderNumber
+        {
+            get
+            {
+                return _OrderNumber;
+            }
+            set
+            {
+                if (_OrderNumber != value)
+                {
+                    _OrderNumber = value;
+                }
+            }
+        }
+
+        bool _IsPlaying;
+        public bool IsPlaying
+        {
+            get
+            {
+                return _IsPlaying;
+            }
+            set
+            {
+                if (_IsPlaying != value)
+                {
+                    _IsPlaying = value;
+                }
+            }
+        }
+
     }
 }

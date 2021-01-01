@@ -171,7 +171,17 @@ namespace Jack.Storage.MemoryObjects
         {
             if (item == null)
                 return;
-            _datas.TryRemove(item, out bool o);
+
+            if (_datas.TryRemove(item, out bool o))
+            {
+
+                _backupQueue.Enqueue(new OpAction<T>()
+                {
+                    Type = ActionType.Remove,
+                    Data = item
+                });
+                _backupEvent.Set();
+            }
         }
         public void Remove(IEnumerable<T> list)
         {
@@ -181,7 +191,16 @@ namespace Jack.Storage.MemoryObjects
             {
                 if (item != null)
                 {
-                    _datas.TryRemove(item, out bool o);
+                    if (_datas.TryRemove(item, out bool o))
+                    {
+
+                        _backupQueue.Enqueue(new OpAction<T>()
+                        {
+                            Type = ActionType.Remove,
+                            Data = item
+                        });
+                        _backupEvent.Set();
+                    }
                 }
             }
 
