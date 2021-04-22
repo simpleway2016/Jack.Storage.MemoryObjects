@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Jack.Storage.MemoryObjects
 {
-    class StorageDB:IDisposable
+    class StorageDB<T>:IDisposable
     {
         SqliteConnection _sqlCon;
         SqliteConnection _sqlConForDelete;
@@ -157,7 +157,141 @@ CREATE INDEX primary_index ON [main] (
                 return cmd.ExecuteScalar();
             }
         }
-        public void Handle<T>(System.Collections.IEnumerable list)
+
+        public void Add(T data)
+        {
+            try
+            {
+                using (var cmd = _sqlCon.CreateCommand())
+                {
+                    Add(data, cmd);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("write file error. \r\n{0}", ex.ToString());
+            }
+        }
+        public void Update(T data)
+        {
+            try
+            {
+                using (var cmd = _sqlCon.CreateCommand())
+                {
+                    Update(data, cmd);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("write file error. \r\n{0}", ex.ToString());
+            }
+        }
+        public void Delete (T data)
+        {
+            try
+            {
+                using (var cmd = _sqlCon.CreateCommand())
+                {
+                    Delete(data, cmd);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("write file error. \r\n{0}", ex.ToString());
+            }
+        }
+        void Add(T data,SqliteCommand cmd)
+        {
+            var key = _pro.GetValue(data);
+
+            cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "p0";
+            p.Value = key;
+            cmd.Parameters.Add(p);
+
+            p = cmd.CreateParameter();
+            p.ParameterName = "p1";
+            try
+            {
+                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
+                p.Value = ex.Message;
+            }
+            cmd.Parameters.Add(p);
+
+            p = cmd.CreateParameter();
+            p.ParameterName = "p2";
+            p.Value = DateTime.Now;
+            cmd.Parameters.Add(p);
+            cmd.ExecuteNonQuery();
+        }
+        void Update(T data, SqliteCommand cmd)
+        {
+            var key = _pro.GetValue(data);
+
+            cmd.CommandText = $"update [main] set Content=@p1 where key=@p0";
+
+            var p = cmd.CreateParameter();
+            p.ParameterName = "p0";
+            p.Value = key;
+            cmd.Parameters.Add(p);
+
+            p = cmd.CreateParameter();
+            p.ParameterName = "p1";
+            try
+            {
+                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
+                p.Value = ex.Message;
+            }
+            cmd.Parameters.Add(p);
+
+            cmd.ExecuteNonQuery();
+        }
+        public void Delete(IEnumerable<T> list)
+        {
+            var tran = _sqlCon.BeginTransaction();
+            try
+            {
+                using (var cmd = _sqlCon.CreateCommand())
+                {
+                    cmd.Transaction = tran;
+                    foreach (var item in list)
+                    {
+                        Delete(item, cmd);
+
+                        cmd.Parameters.Clear();
+                    }
+                }
+                tran.Commit();
+            }
+            catch (Exception ex)
+            {
+                tran.Rollback();
+                _logger?.LogError("write file error. \r\n{0}", ex.ToString());
+            }
+
+        }
+        void Delete(T data, SqliteCommand cmd)
+        {
+            var key = _pro.GetValue(data);
+
+            cmd.CommandText = $"delete from [main] where key=@p0";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "p0";
+            p.Value = key;
+            cmd.Parameters.Add(p);
+
+            cmd.ExecuteNonQuery();
+        }
+        public void Handle(System.Collections.IEnumerable list)
         {
             var tran = _sqlCon.BeginTransaction();
             try
@@ -168,69 +302,20 @@ CREATE INDEX primary_index ON [main] (
                     foreach (OpAction<T> item in list)
                     {
                         var data = item.Data;
-                        
-                        var key = _pro.GetValue(data);
 
                         if (item.Type == ActionType.Add)
                         {
-                            cmd.CommandText = $"insert into [main] (key,Content,CreateTime) values (@p0,@p1,@p2)";
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
-
-                            p = cmd.CreateParameter();
-                            p.ParameterName = "p1";
-                            try
-                            {
-                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
-                                p.Value = ex.Message;
-                            }
-                            cmd.Parameters.Add(p);
-
-                            p = cmd.CreateParameter();
-                            p.ParameterName = "p2";
-                            p.Value = DateTime.Now;
-                            cmd.Parameters.Add(p);
-
-                           
+                            Add(data, cmd);                           
                         }
                         else if (item.Type == ActionType.Update)
                         {
-                            cmd.CommandText = $"update [main] set Content=@p1 where key=@p0";
-
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
-
-                            p = cmd.CreateParameter();
-                            p.ParameterName = "p1";
-                            try
-                            {
-                                p.Value = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Newtonsoft.Json.JsonConvert.SerializeObject Error. key value:{0} \r\n{1}", key, ex.Message);
-                                p.Value = ex.Message;
-                            }
-                            cmd.Parameters.Add(p);
-
+                            Update(data, cmd);
                         }
                         else if(item.Type == ActionType.Remove)
                         {
-                            cmd.CommandText = $"delete from [main] where key=@p0";
-                            var p = cmd.CreateParameter();
-                            p.ParameterName = "p0";
-                            p.Value = key;
-                            cmd.Parameters.Add(p);
+                            Delete(data, cmd);
                         }
-                        cmd.ExecuteNonQuery();
+
                         cmd.Parameters.Clear();
                     }
                 }

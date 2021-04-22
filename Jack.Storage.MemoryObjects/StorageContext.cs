@@ -20,28 +20,25 @@ namespace Jack.Storage.MemoryObjects
         public int Count => _dataList.Count;
 
 
-        bool _disposed = false;
         List<int> _freeIndex = new List<int>();
 
         List<DataItem<T>> _dataList = new List<DataItem<T>>();
-        ConcurrentQueue<OpAction<T>> _backupQueue = new ConcurrentQueue<OpAction<T>>();
-        System.Threading.ManualResetEvent _backupEvent = new System.Threading.ManualResetEvent(false);
-        bool _backupExited = false;
 
 
         System.Reflection.PropertyInfo _propertyInfo;
-        StorageDB _db;
+        StorageDB<T> _db;
         bool _checkRepeatPrimaryKey;
 
-        Client<T> _netClient;
+        IStorageQueue<T> _storageQueue;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="storageName">保存的名称</param>
         /// <param name="primaryPropertyName">主键属性的名称，必须是long、int、string类型</param>
+        /// <param name="asyncSaveFile">是否异步同步到文件当中,true写入性能较快，但数据存在丢失风险</param>
         /// <param name="checkRepeatPrimaryKey">是否检查主键重复，如果为true，会对写入性能有影响</param>
         /// <param name="logger"></param>
-        public StorageContext(string storageName,string primaryPropertyName, bool checkRepeatPrimaryKey = false, ILogger logger = null)
+        public StorageContext(string storageName,string primaryPropertyName,bool asyncSaveFile = true, bool checkRepeatPrimaryKey = false, ILogger logger = null)
         {
             var filepath = "./Jack.Storage.MemoryObjects.datas/" + storageName + ".db";
             _checkRepeatPrimaryKey = checkRepeatPrimaryKey;
@@ -63,13 +60,20 @@ namespace Jack.Storage.MemoryObjects
             }
             this.StorageName = storageName;
 
-            _db = new StorageDB(filepath , _propertyInfo , logger);
+            _db = new StorageDB<T>(filepath , _propertyInfo , logger);
 
             _db.ReadData<T>((item) => {
                 _dataList.Add(new DataItem<T>(item));
             });
 
-            new Thread(backupRunning).Start();
+            if (asyncSaveFile)
+            {
+                _storageQueue = new Local.AsyncStorageQueue<T>(_dataList, filepath, _propertyInfo, logger);
+            }
+            else
+            {
+                _storageQueue = new Local.SyncStorageQueue<T>(_dataList, filepath, _propertyInfo, logger);
+            }
         }
         /// <summary>
         /// 通过网络服务保存为文件，持久化数据
@@ -100,98 +104,18 @@ namespace Jack.Storage.MemoryObjects
             }
             this.StorageName = storageName;
 
-            if(isAsync)
-            {
-                _netClient = new ClientAsync<T>(serverAddr, port, _propertyInfo, new CommandHeader()
-                {
-                    FilePath = filepath,
-                    IsAsync =true,
-                    KeyName = primaryPropertyName,
-                    KeyType = _propertyInfo.PropertyType.FullName
-                }, (item) => {
-                    _dataList.Add(new DataItem<T>(item));
-                });
-            }
-            else
-            {
-                _netClient = new Client<T>(serverAddr, port, _propertyInfo, new CommandHeader()
-                {
-                    FilePath = filepath,
-                    KeyName = primaryPropertyName,
-                    KeyType = _propertyInfo.PropertyType.FullName
-                }, (item) => {
-                    _dataList.Add(new DataItem<T>(item));
-                });
-            }
-            
+            _storageQueue = new Net.NetStorageQueue<T>(_dataList, filepath, serverAddr, port, storageName, _propertyInfo, isAsync);
 
         }
 
-      
-        void backupRunning()
-        {
-            while(!_disposed || _backupQueue.Count > 0)
-            {
-                _backupEvent.WaitOne();
-                _backupEvent.Reset();
 
-                List<OpAction<T>> buffer = new List<OpAction<T>>(500);
-                while(true)
-                {
-                    if (_backupQueue.TryDequeue(out OpAction<T> dataitem))
-                    {
-                        buffer.Add(dataitem);
-                    }
-                    else
-                        break;
-                }
-
-                if (buffer.Count > 0)
-                {
-                    _db.Handle<T>(buffer);
-                }
-                    
-            }
-            _backupExited = true;
-        }
         /// <summary>
         /// 释放对象，并保证所有数据已经同步到文件
         /// </summary>
         public void Dispose()
         {
-            if (_netClient == null)
-            {
-                _disposed = true;
-                _backupEvent.Set();
-
-                while (!_backupExited)
-                    Thread.Sleep(100);
-                _db.Dispose();
-            }
-            else
-            {
-                _netClient.CheckAllSaved();
-                _netClient.Dispose();
-            }
+            _storageQueue.Dispose();
             _dataList.Clear();
-        }
-
-        void DeleteFile()
-        {
-           
-            lock(_dataList)
-            {
-                if (_netClient != null)
-                {
-                    _netClient.Send(new OpAction<T>()
-                    {
-                        Type = ActionType.DeleteFile,
-                    });
-                }
-                this._dataList.Clear();
-
-            }
-          
         }
 
         
@@ -236,23 +160,7 @@ namespace Jack.Storage.MemoryObjects
                     }
                 }
 
-                if (_netClient == null)
-                {
-                    _backupQueue.Enqueue(new OpAction<T>()
-                    {
-                        Type = ActionType.Add,
-                        Data = item
-                    });
-                    _backupEvent.Set();
-                }
-                else
-                {
-                    _netClient.Send(new OpAction<T>()
-                    {
-                        Type = ActionType.Add,
-                        Data = item
-                    });
-                }
+                _storageQueue.Add(item);
             }
            
         }
@@ -276,23 +184,7 @@ namespace Jack.Storage.MemoryObjects
                     }
                 }
 
-                if (_netClient == null)
-                {
-                    _backupQueue.Enqueue(new OpAction<T>()
-                    {
-                        Type = ActionType.Update,
-                        Data = item
-                    });
-                    _backupEvent.Set();
-                }
-                else
-                {
-                    _netClient.Send(new OpAction<T>()
-                    {
-                        Type = ActionType.Update,
-                        Data = item
-                    });
-                }
+                _storageQueue.Update(item);
             }
           
 
@@ -311,23 +203,7 @@ namespace Jack.Storage.MemoryObjects
                 _dataList[index] = null;
                 _freeIndex.Add(index);
 
-                if (_netClient == null)
-                {
-                    _backupQueue.Enqueue(new OpAction<T>()
-                    {
-                        Type = ActionType.Remove,
-                        Data = item
-                    });
-                    _backupEvent.Set();
-                }
-                else
-                {
-                    _netClient.Send(new OpAction<T>()
-                    {
-                        Type = ActionType.Remove,
-                        Data = item
-                    });
-                }
+                _storageQueue.Remove(item);
             }
         }
         public void Remove(IEnumerable<T> list)
@@ -353,36 +229,7 @@ namespace Jack.Storage.MemoryObjects
                     }                    
                 }
 
-                if (_netClient == null)
-                {
-                    foreach (var item in arr)
-                    {
-                        if (item != null)
-                        {
-                            _backupQueue.Enqueue(new OpAction<T>()
-                            {
-                                Type = ActionType.Remove,
-                                Data = item
-                            });
-                        }
-                    }
-
-                    _backupEvent.Set();
-                }
-                else
-                {
-                    foreach (var item in arr)
-                    {
-                        if (item != null)
-                        {
-                            _netClient.Send(new OpAction<T>()
-                            {
-                                Type = ActionType.Remove,
-                                Data = item
-                            });
-                        }
-                    }
-                }
+                _storageQueue.Remove(arr);
             }
 
         }

@@ -44,7 +44,8 @@ namespace Jack.Storage.MemoryObjects.Net
             if (item.Data != null)
             {
                 action.KeyValue = _propertyInfo.GetValue(item.Data).ToString();
-                action.Data = item.Data.ToJsonString();
+                if(item.Type == ActionType.Add || item.Type == ActionType.Update)
+                    action.Data = item.Data.ToJsonString();
             }
             var bs = Encoding.UTF8.GetBytes(action.ToJsonString());
             var sendData = new byte[bs.Length + 4];

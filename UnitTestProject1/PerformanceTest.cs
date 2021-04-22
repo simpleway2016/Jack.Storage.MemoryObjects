@@ -47,6 +47,36 @@ namespace UnitTestProject1
         }
 
         [TestMethod]
+        public void SyncAdd()
+        {
+            var filepath = "PerformanceTest";
+
+
+            var context = new StorageContext<MyDataItem>(filepath, "Name" , false);
+            var item2 = new MyDataItem();
+            item2.Name = "awef0";
+            context.Add(item2);
+            context.Dispose();
+
+            System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
+            watch.Start();
+            context = new StorageContext<MyDataItem>(filepath, "Name");
+            for (int i = 0; i < 1000000; i++)
+            {
+                var item = new MyDataItem();
+                item.Name = "Jack" + i;
+                context.Add(item);
+            }
+
+            watch.Stop();
+            Debug.WriteLine($"同步写入总耗时：{watch.ElapsedMilliseconds}ms");
+
+            context.Dispose();
+           
+            System.IO.File.Delete(filepath);
+        }
+
+        [TestMethod]
         public void Read()
         {
             var filepath = "PerformanceTest2";
